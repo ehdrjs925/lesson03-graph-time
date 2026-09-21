@@ -14,6 +14,8 @@ GRAPH_2_INSIGHT = '기간 내 일관객 합계가 큰 5편의 관객수 변화�
 
 GRAPH_3_INSIGHT = '날짜별 10위권 관객 규모의 변화와 관객이 가장 많이 몰린 3일을 알 수 있습니다.'
 
+GRAPH_4_INSIGHT = '기간 내 일관객 합계가 큰 영화 10편의 관객 규모와 10위권에 머문 날수를 비교할 수 있습니다.'
+
 st.set_page_config(page_title=TITLE, page_icon='🎬', layout='wide')
 
 # ============================================================
@@ -165,7 +167,56 @@ def show_daily_total(df):
     st.caption('합계는 그날 박스오피스 10위권 영화의 기록만 더한 값으로, 전체 영화 관객수와는 다릅니다. 합계가 같으면 날짜가 이른 날부터 표시합니다.')
 
 # ============================================================
-# 5. 다음 그래프 추가 공간
+# 5. 그래프 4 — 영화별 기간 내 일관객 합계 TOP 10
+# ============================================================
+def make_top_ten_summary(df):
+    # 영화코드로 묶어 동명 영화를 구분하며, 날짜 수는 중복 없이 셉니다.
+    summary = (
+        df.loc[df['순위'].between(1, 10)]
+        .groupby('영화코드', as_index=False)
+        .agg(영화명=('영화명', 'first'),
+             일관객합계=('일관객', 'sum'),
+             진입일수=('날짜', 'nunique'))
+        .sort_values(['일관객합계', '영화코드'], ascending=[False, True])
+        .head(10).copy()
+    )
+    duplicates = summary['영화명'].duplicated(keep=False)
+    summary['영화'] = summary['영화명']
+    summary.loc[duplicates, '영화'] = (
+        summary.loc[duplicates, '영화명'] + ' ('
+        + summary.loc[duplicates, '영화코드'].astype(str) + ')'
+    )
+    return summary
+
+
+def show_top_ten_bar(df):
+    st.header('4. 영화별 일관객 합계 TOP 10')
+    summary = make_top_ten_summary(df)
+    if summary.empty:
+        st.info('표시할 10위권 기록이 없습니다.')
+        return
+    fig = px.bar(
+        summary, x='일관객합계', y='영화', orientation='h',
+        custom_data=['진입일수'],
+        labels={'일관객합계': '기간 내 일관객 합계 (명)', '영화': '영화'},
+        color_discrete_sequence=['#4682B4'],
+    )
+    # 내림차순 목록의 첫 영화를 맨 위에 표시합니다.
+    fig.update_yaxes(
+        categoryorder='array', categoryarray=summary['영화'].tolist(),
+        autorange='reversed', automargin=True,
+    )
+    fig.update_xaxes(tickformat=',.0f', rangemode='tozero')
+    fig.update_traces(
+        hovertemplate='영화: %{y}<br>기간 내 일관객 합계: %{x:,.0f}명<br>기간 내 10위권 진입일수: %{customdata[0]:,.0f}일<extra></extra>'
+    )
+    fig.update_layout(height=600, showlegend=False)
+    st.plotly_chart(fig, width='stretch', key='graph_4_top_ten')
+    show_insight(GRAPH_4_INSIGHT)
+    st.caption('합계와 진입일수는 이 데이터 기간의 10위권 기록만을 기준으로 합니다. 개봉일과 기간 밖 기록이 없어 개봉 이후 전체 진입일수는 알 수 없습니다.')
+
+# ============================================================
+# 6. 다음 그래프 추가 공간
 # 새 그래프는 함수로 작성하고 main()에서 호출하세요.
 # 그래프 아래에는 show_insight('이 그래프의 해석 한 문장')를 넣으세요.
 # ============================================================
@@ -192,7 +243,9 @@ def main():
     st.divider()
     show_daily_total(df)
     st.divider()
-    st.header('4. 다음 그래프')
+    show_top_ten_bar(df)
+    st.divider()
+    st.header('5. 다음 그래프')
     st.caption('새로운 그래프를 추가할 공간입니다.')
 
 
