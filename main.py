@@ -12,6 +12,8 @@ GRAPH_1_INSIGHT = '선택한 영화의 일관객이 시간에 따라 언제 늘�
 
 GRAPH_2_INSIGHT = '기간 내 일관객 합계가 큰 5편의 관객수 변화와 흥행이 집중된 시기를 비교할 수 있습니다.'
 
+GRAPH_3_INSIGHT = '날짜별 10위권 관객 규모의 변화와 관객이 가장 많이 몰린 3일을 알 수 있습니다.'
+
 st.set_page_config(page_title=TITLE, page_icon='🎬', layout='wide')
 
 # ============================================================
@@ -114,7 +116,56 @@ def show_top_five(df):
     st.caption('상위 5편은 이 데이터에 포함된 10위권 기록의 일관객 합계로 선정합니다. 기록이 없는 날짜는 0으로 채우지 않고 선을 끊습니다.')
 
 # ============================================================
-# 4. 다음 그래프 추가 공간
+# 4. 그래프 3 — 날짜별 10위권 일관객 합계
+# ============================================================
+def show_daily_total(df):
+    st.header('3. 날짜별 10위권 일관객 합계')
+    daily = (
+        df.loc[df['순위'].between(1, 10)]
+        .groupby('날짜', as_index=False)['일관객'].sum()
+        .rename(columns={'일관객': '일관객 합계'})
+        .sort_values('날짜')
+    )
+    if daily.empty:
+        st.info('표시할 10위권 기록이 없습니다.')
+        return
+    # 동률이면 날짜가 이른 날을 먼저 선택합니다.
+    top_days = daily.sort_values(
+        ['일관객 합계', '날짜'], ascending=[False, True]
+    ).head(3)
+    fig = px.area(
+        daily, x='날짜', y='일관객 합계',
+        labels={'날짜': '날짜', '일관객 합계': '10위권 일관객 합계 (명)'},
+        color_discrete_sequence=['#4682B4'],
+    )
+    fig.update_traces(
+        hovertemplate='날짜: %{x|%Y-%m-%d}<br>10위권 일관객 합계: %{y:,.0f}명<extra></extra>'
+    )
+    fig.add_scatter(
+        x=top_days['날짜'], y=top_days['일관객 합계'], mode='markers',
+        marker={'size': 10, 'color': '#D94841'}, showlegend=False,
+        hovertemplate='날짜: %{x|%Y-%m-%d}<br>10위권 일관객 합계: %{y:,.0f}명<extra></extra>',
+    )
+    # 날짜가 서로 가까워도 읽기 쉽도록 주석을 상단 세 칸에 나눕니다.
+    for i, (_, row) in enumerate(top_days.sort_values('날짜').iterrows()):
+        fig.add_annotation(
+            x=row['날짜'], y=row['일관객 합계'], xref='x', yref='y',
+            text=row['날짜'].strftime('%Y-%m-%d'),
+            ax=daily['날짜'].min() + (daily['날짜'].max() - daily['날짜'].min()) * ((i + 0.5) / 3), axref='x',
+            ay=daily['일관객 합계'].max() * 1.15, ayref='y',
+            showarrow=True, arrowhead=2, arrowcolor='#D94841',
+            bgcolor='white', bordercolor='#D94841', borderpad=4,
+            font={'color': '#A52A2A', 'size': 12},
+        )
+    fig.update_layout(height=500, margin={'t': 90}, hovermode='closest')
+    fig.update_xaxes(tickformat='%Y-%m-%d')
+    fig.update_yaxes(tickformat=',.0f', rangemode='tozero')
+    st.plotly_chart(fig, width='stretch', key='graph_3_daily_total')
+    show_insight(GRAPH_3_INSIGHT)
+    st.caption('합계는 그날 박스오피스 10위권 영화의 기록만 더한 값으로, 전체 영화 관객수와는 다릅니다. 합계가 같으면 날짜가 이른 날부터 표시합니다.')
+
+# ============================================================
+# 5. 다음 그래프 추가 공간
 # 새 그래프는 함수로 작성하고 main()에서 호출하세요.
 # 그래프 아래에는 show_insight('이 그래프의 해석 한 문장')를 넣으세요.
 # ============================================================
@@ -139,7 +190,9 @@ def main():
     st.divider()
     show_top_five(df)
     st.divider()
-    st.header('3. 다음 그래프')
+    show_daily_total(df)
+    st.divider()
+    st.header('4. 다음 그래프')
     st.caption('새로운 그래프를 추가할 공간입니다.')
 
 
