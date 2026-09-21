@@ -10,6 +10,8 @@ DATA_URL = 'https://raw.githubusercontent.com/greatsong/modudata/main/data/kobis
 # 그래프 아래에 표시할 한 문장을 이곳에서 수정하세요.
 GRAPH_1_INSIGHT = '선택한 영화의 일관객이 시간에 따라 언제 늘고 줄었는지 알 수 있습니다.'
 
+GRAPH_2_INSIGHT = '기간 내 일관객 합계가 큰 5편의 관객수 변화와 흥행이 집중된 시기를 비교할 수 있습니다.'
+
 st.set_page_config(page_title=TITLE, page_icon='🎬', layout='wide')
 
 # ============================================================
@@ -68,7 +70,51 @@ def show_daily_audience(df):
     st.caption('일별 박스오피스 10위권에 포함된 기록만 표시합니다. 기록이 없는 날짜는 관객수 0을 뜻하지 않으며, 선을 연결하지 않습니다.')
 
 # ============================================================
-# 3. 다음 그래프 추가 공간
+# 3. 그래프 2 — 기간 내 일관객 합계 상위 5편 비교
+# ============================================================
+def show_top_five(df):
+    st.header('2. 일관객 합계 상위 5편 비교')
+    # 누적관객이 아니라, 데이터 기간에 기록된 일관객을 합산합니다.
+    top_codes = df.groupby('영화코드')['일관객'].sum().nlargest(5).index.tolist()
+    names = df.drop_duplicates('영화코드').set_index('영화코드')['영화명']
+    top_names = names.loc[top_codes]
+    duplicates = set(top_names[top_names.duplicated(keep=False)])
+    dates = pd.date_range(df['날짜'].min(), df['날짜'].max(), freq='D')
+    parts = []
+    labels = []
+    for code in top_codes:
+        label = f'{names[code]} ({code})' if names[code] in duplicates else names[code]
+        labels.append(label)
+        daily = df.loc[df['영화코드'] == code].groupby('날짜')['일관객'].sum()
+        part = daily.reindex(dates).rename_axis('날짜').reset_index()
+        part['영화'] = label
+        parts.append(part)
+    plot_data = pd.concat(parts, ignore_index=True)
+    fig = px.line(
+        plot_data, x='날짜', y='일관객', color='영화',
+        category_orders={'영화': labels},
+        color_discrete_sequence=px.colors.qualitative.Safe,
+        labels={'날짜': '날짜', '일관객': '일관객 (명)'},
+        custom_data=['영화'],
+    )
+    fig.update_traces(
+        connectgaps=False,
+        hovertemplate='영화: %{customdata[0]}<br>날짜: %{x|%Y-%m-%d}<br>관객수: %{y:,.0f}명<extra></extra>',
+    )
+    fig.update_layout(
+        hovermode='closest',
+        legend={'title_text': '영화 (클릭하여 켜기·끄기)',
+                'itemclick': 'toggle', 'itemdoubleclick': 'toggleothers'},
+    )
+    fig.update_xaxes(tickformat='%Y-%m-%d')
+    fig.update_yaxes(tickformat=',.0f', rangemode='tozero')
+    st.plotly_chart(fig, use_container_width=True, key='graph_2_top_five')
+    show_insight(GRAPH_2_INSIGHT)
+    st.caption('범례를 클릭하면 해당 영화를 숨기거나 다시 표시하며, 두 번 클릭하면 그 영화만 볼 수 있습니다.')
+    st.caption('상위 5편은 이 데이터에 포함된 10위권 기록의 일관객 합계로 선정합니다. 기록이 없는 날짜는 0으로 채우지 않고 선을 끊습니다.')
+
+# ============================================================
+# 4. 다음 그래프 추가 공간
 # 새 그래프는 함수로 작성하고 main()에서 호출하세요.
 # 그래프 아래에는 show_insight('이 그래프의 해석 한 문장')를 넣으세요.
 # ============================================================
@@ -91,7 +137,9 @@ def main():
     st.divider()
     show_daily_audience(df)
     st.divider()
-    st.header('2. 다음 그래프')
+    show_top_five(df)
+    st.divider()
+    st.header('3. 다음 그래프')
     st.caption('새로운 그래프를 추가할 공간입니다.')
 
 
