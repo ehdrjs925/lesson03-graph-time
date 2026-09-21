@@ -16,6 +16,8 @@ GRAPH_3_INSIGHT = '날짜별 10위권 관객 규모의 변화와 관객이 가�
 
 GRAPH_4_INSIGHT = '기간 내 일관객 합계가 큰 영화 10편의 관객 규모와 10위권에 머문 날수를 비교할 수 있습니다.'
 
+GRAPH_5_INSIGHT = '어느 월과 요일 조합에 10위권 관객이 많이 모였는지 색의 진하기로 비교할 수 있습니다.'
+
 st.set_page_config(page_title=TITLE, page_icon='🎬', layout='wide')
 
 # ============================================================
@@ -216,7 +218,52 @@ def show_top_ten_bar(df):
     st.caption('합계와 진입일수는 이 데이터 기간의 10위권 기록만을 기준으로 합니다. 개봉일과 기간 밖 기록이 없어 개봉 이후 전체 진입일수는 알 수 없습니다.')
 
 # ============================================================
-# 6. 다음 그래프 추가 공간
+# 6. 그래프 5 — 월 × 요일 일관객 합계 히트맵
+# ============================================================
+def make_month_weekday_summary(df):
+    records = df.loc[df['순위'].between(1, 10)].copy()
+    # 서로 다른 연도의 같은 달을 합치지 않도록 연월을 사용합니다.
+    records['월'] = records['날짜'].dt.strftime('%Y-%m')
+    records['요일번호'] = records['날짜'].dt.dayofweek  # 월요일=0, 일요일=6
+    matrix = records.groupby(['월', '요일번호'])['일관객'].sum().unstack('요일번호')
+    matrix = matrix.sort_index().reindex(columns=range(7))
+    matrix.columns = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일']
+    return matrix
+
+
+def show_month_weekday_heatmap(df):
+    st.header('5. 월 × 요일별 일관객 합계')
+    matrix = make_month_weekday_summary(df)
+    if matrix.empty:
+        st.info('표시할 10위권 기록이 없습니다.')
+        return
+    fig = px.imshow(
+        matrix, aspect='auto', origin='upper',
+        color_continuous_scale='Blues', zmin=0,
+        labels={'x': '요일', 'y': '월', 'color': '일관객 합계 (명)'},
+    )
+    fig.update_traces(
+        hovertemplate='월: %{y}<br>요일: %{x}<br>일관객 합계: %{z:,.0f}명<extra></extra>',
+        hoverongaps=False,
+    )
+    fig.update_xaxes(
+        type='category', categoryorder='array', categoryarray=matrix.columns.tolist(),
+        side='bottom',
+    )
+    fig.update_yaxes(
+        type='category', categoryorder='array', categoryarray=matrix.index.tolist(),
+        autorange='reversed',
+    )
+    fig.update_layout(
+        height=max(420, len(matrix) * 35 + 120),
+        coloraxis_colorbar={'tickformat': ',.0f'},
+    )
+    st.plotly_chart(fig, width='stretch', key='graph_5_month_weekday')
+    show_insight(GRAPH_5_INSIGHT)
+    st.caption('각 칸은 해당 월·요일의 10위권 일관객 합계이며, 색이 진할수록 관객이 많습니다. 합계는 기록된 날짜 수의 영향도 받으며, 기록이 없는 조합은 빈칸으로 표시합니다.')
+
+# ============================================================
+# 7. 다음 그래프 추가 공간
 # 새 그래프는 함수로 작성하고 main()에서 호출하세요.
 # 그래프 아래에는 show_insight('이 그래프의 해석 한 문장')를 넣으세요.
 # ============================================================
@@ -245,7 +292,9 @@ def main():
     st.divider()
     show_top_ten_bar(df)
     st.divider()
-    st.header('5. 다음 그래프')
+    show_month_weekday_heatmap(df)
+    st.divider()
+    st.header('6. 다음 그래프')
     st.caption('새로운 그래프를 추가할 공간입니다.')
 
 
