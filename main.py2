@@ -1,0 +1,115 @@
+import pandas as pd
+import plotly.express as px
+import streamlit as st
+
+# -----------------------------
+# 기본 설정
+# -----------------------------
+st.set_page_config(
+    page_title="영화 데이터 그래프 도감 2 - 분포와 관계",
+    page_icon="🎬",
+    layout="wide",
+)
+
+DATA_URL = "https://raw.githubusercontent.com/greatsong/modudata/main/data/kobis_movies.csv"
+
+
+# -----------------------------
+# 데이터 불러오기 및 전처리
+# -----------------------------
+@st.cache_data
+def load_data():
+    df = pd.read_csv(DATA_URL, encoding="utf-8-sig")
+
+    # 개봉일: YYYYMMDD 형식의 8자리 값을 실제 날짜형으로 변환
+    df["openDt"] = pd.to_datetime(
+        df["openDt"].astype(str),
+        format="%Y%m%d",
+        errors="coerce"
+    )
+
+    # genre에 |가 있으면 첫 번째 장르만 사용
+    # 예: "드라마|전쟁" -> "드라마"
+    # "/"는 사용자가 지정한 분리 기호가 아니므로 그대로 둠
+    df["main_genre"] = (
+        df["genre"]
+        .fillna("기타")
+        .astype(str)
+        .str.split("|", regex=False)
+        .str[0]
+        .str.strip()
+    )
+
+    # 빈 장르값 처리
+    df.loc[df["main_genre"].eq(""), "main_genre"] = "기타"
+
+    return df
+
+
+df = load_data()
+
+
+# -----------------------------
+# 제목
+# -----------------------------
+st.title("영화 데이터 그래프 도감 2 - 분포와 관계")
+st.caption("1년간 박스오피스 10위권에 진입한 영화 중 해당 기간에 개봉한 영화 데이터를 분석합니다.")
+
+st.divider()
+
+
+# =========================================================
+# 그래프 1. 장르별 영화 편수
+# =========================================================
+st.header("1. 장르별 영화 편수")
+st.write("영화의 대표 장르를 기준으로 장르별 영화 편수를 비교합니다.")
+
+genre_counts = (
+    df["main_genre"]
+    .value_counts()
+    .rename_axis("장르")
+    .reset_index(name="영화 편수")
+)
+
+fig1 = px.pie(
+    genre_counts,
+    names="장르",
+    values="영화 편수",
+    hole=0.48,
+)
+
+fig1.update_traces(
+    textinfo="label+percent",
+    hovertemplate=(
+        "<b>%{label}</b><br>"
+        "영화 편수: %{value:,}편<br>"
+        "비율: %{percent}<extra></extra>"
+    ),
+)
+
+fig1.update_layout(
+    margin=dict(t=30, b=20, l=20, r=20),
+    legend_title_text="장르",
+)
+
+st.plotly_chart(fig1, use_container_width=True)
+
+st.markdown(
+    "**이 그래프로 알 수 있는 것:** "
+    "장르별 영화 편수와 전체 영화에서 각 장르가 차지하는 비율을 비교할 수 있다."
+)
+
+st.divider()
+
+
+# =========================================================
+# 다음 그래프 추가 구역
+# =========================================================
+st.header("2. 다음 그래프")
+st.info("앞으로 분포와 관계를 살펴보는 그래프를 이 구역부터 계속 추가할 수 있습니다.")
+
+# 예시 구조
+# fig2 = ...
+# st.plotly_chart(fig2, use_container_width=True)
+# st.markdown("**이 그래프로 알 수 있는 것:** ...")
+# st.divider()
